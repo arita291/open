@@ -1,0 +1,241 @@
+# -*- coding: utf-8 -*-
+"""
+Testinf of Super Fast Compiler to datav
+"""
+
+!pip install dsltools
+!pip install parakeet
+
+
+import numpy as np
+from parakeet import jit
+
+@jit 
+def allpairs_dist(X,Y):
+  """
+  Compute all pairs distances between rows of X and Y
+  For two 1000x1000 float64 inputs (on a 2.67ghz Xeon): 
+  - Python runtime: 11.5 seconds
+  - Parakeet runtime: .013 seconds 
+  """
+  def dist(x,y):
+    return np.sum( (x-y)**2 )
+  return np.array([[dist(x,y) for y in Y] for x in X])
+
+@jit 
+def smoothing(x, alpha):
+  """
+  Exponential smoothing of a time series
+  For x = 10**6 floats
+  - Python runtime: 9.7 seconds
+  - Parakeet runtime: .009 seconds
+  """
+  s = x.copy()
+  for i in xrange(1, len(x)):
+    s[i] = alpha * x[i] + (1 - alpha) * s[i-1]
+  return s
+  
+x= np.random.normal(0,1,1000)
+y= np.random.normal(0,1,1000) 
+
+
+aa= allpairs_dist(x,y)
+
+
+#---------Various Utilities function for Python----------------------------
+import scipy as sp;import numpy as np; import numexpr as ne
+import pandas as pd; import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+from numba import jit, vectorize, guvectorize, float64, float32, int32, boolean
+from timeit import default_timer as timer
+
+
+%timeit allpairs_dist(x,y)
+  
+  
+import numpy as np
+import numexpr as ne
+from numba import jit as numba_jit
+from parakeet import jit as para_jit
+
+
+def numpy_complex_expr(A, B):
+    return(A*B-4.1*A > 2.5*B)
+
+def numexpr_complex_expr(A, B):
+    return ne.evaluate('A*B-4.1*A > 2.5*B')
+
+@numba_jit
+def numba_complex_expr(A, B):
+    return A*B-4.1*A > 2.5*B
+
+@para_jit
+def parakeet_complex_expr(A, B):
+    return A*B-4.1*A > 2.5*B
+    
+    
+%load_ext cythonmagic    
+
+
+%%cython
+import numpy as np
+cimport numpy as np
+cimport cython
+@cython.boundscheck(False) 
+@cython.wraparound(False)
+cpdef cython_unrolled(double[:, :] A, double[:, :] B):
+    cdef long i, j, rows, cols
+    cdef double[:, :] C
+    rows = A.shape[0]
+    cols = A.shape[1]
+    C = np.empty((rows,cols,))
+    for i in xrange(rows):
+        for j in xrange(cols):
+            C[i,j] = A[i,j]*B[i,j] + 4.1*A[i,j] > 2.5*B[i,j]
+
+    return np.asarray(C)    
+    
+
+import numpy as np
+
+def numpy_regular(A, B):
+    return(A*B-4.1*A > 2.5*B)
+
+
+import numexpr as ne
+
+def numexpr_evaluate(A, B):
+    return ne.evaluate('A*B-4.1*A > 2.5*B')
+  
+from numba import jit
+
+@jit
+def numba_jit(A, B):
+    return A*B-4.1*A > 2.5*B
+
+
+from numba import vectorize
+
+@vectorize(['u1(float64, float64)'])
+def numba_vectorized(A,B):
+    return A*B+4.1*A > 2.5*B
+
+
+from parakeet import jit as para_jit
+
+@para_jit
+def parakeet_jit(A, B):
+    return A*B-4.1*A > 2.5*B
+  
+  
+import timeit
+
+orders_n = [10**n for n in range(5, 5)]
+
+funcs = ['numpy_regular', 'numba_jit', 'numba_vectorized',
+         'parakeet_jit', 'cython_unrolled', 'numexpr_evaluate'
+        ]
+
+timings = {f:[] for f in funcs}
+
+for n in orders_n:
+    for f in funcs:
+        A = np.random.rand(n,n)
+        B = np.random.rand(n,n)
+        timings[f].append(min(timeit.Timer('%s(A, B)' %f, 
+                      'from __main__ import A, B, %s' %f)
+                              .repeat(repeat=2, number=10)))
+                              
+
+import platform
+from llvm import __version__ as llvm__version__
+from parakeet import __version__ as parakeet__version__
+from numba import __version__ as numba__version__
+
+def print_sysinfo():
+    print '\nsystem   :', platform.system()
+    print 'release  :', platform.release()
+    print 'machine  :', platform.machine()
+    print 'processor:', platform.processor()
+    print 'interpreter:', platform.architecture()[0]
+
+    print '\nPython version', platform.python_version()
+    print 'compiler', platform.python_compiler()
+    print 'NumPy version', np.__version__
+    print 'Numexpr version', ne.__version__
+    print 'parakeet version', parakeet__version__
+    print 'Numba version', numba__version__
+    print 'llvm version', llvm__version__
+    print '\n\n'
+
+
+
+import prettytable
+
+def summary_table(funcs):
+    fit_table = prettytable.PrettyTable(['n=%s' %orders_n[-1], 
+                                         'function' ,
+                                         'rel. performance gain'])
+    fit_table.align['function'] = 'l'
+    for f in funcs:
+        fit_table.add_row(['', f, '{:.2f}x'.format(
+            (timings['numpy_regular'][-1]/timings[f][-1]))])
+    print(fit_table)                              
+                              
+
+
+%matplotlib inline
+In [25]:
+import matplotlib.pyplot as plt
+
+def plot_figures(funcs): 
+    fig = plt.figure(figsize=(8,8))
+    for f in funcs:
+        plt.plot([i**2 for i in orders_n], [i*100 for i in timings[f]], 
+                            alpha=0.5, label='%s' %f, marker='o', lw=2)
+    plt.legend(loc='upper left')
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.grid()
+    plt.xlabel('number of elements per matrix')
+    plt.ylabel('time in milliseconds')
+    plt.title('Approaches to evaluate the NumPy array expression "A*B-4.1*A > 2.5*B"')
+        
+    plt.show()
+
+
+   
+print_sysinfo()
+summary_table(funcs)
+plot_figures(funcs)    
+    
+    
+
+
+//---------Slit the computation---------------------------------------------------------------------------------------------------
+  n = m * chunk
+  input = given array x of length n
+  result = array of length n
+  
+  subarray_sums = array of length m
+  for i in 0, 1, .., m - 1 in parrallel:
+      subarray_sums[i] = sum(result[i * chunk : (i + 1) * chunk])
+       
+  # Now we can compute 
+  
+  result[0] = 0
+  for i in 0, 1, .., m - 1:
+      result[(i + 1) * chunk] = result[i * chunk] + subarray_sums[i] 
+      
+  for i in 0, 1, .., m - 1 in parallel:
+      for position in i * chunk, i * chunk + chunk - 1:
+          result[position + 1] = result[position] + input[position] 
+//------------------------------------------------------------------------------------------------------------
+
+data = np.random.random([100000, 64]).astype(order='C', dtype='float32')
+%timeit predict_odt_fast(data, features, splits, leaf_values)
+
+data = np.random.random([100000, 64]).astype(order='F', dtype='float32')
+%timeit predict_odt_fast(data, features, splits, leaf_values)
+
+
