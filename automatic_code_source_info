@@ -2,8 +2,8 @@
 # Describe classes, methods and functions in a module.  Works with user-defined modules, all Python library modules, including built-in modules.
 
 #-------------------------------------------------------------------------------
-file1= r"D:\_devs\Python01\aapackage\printdoc.txt"
-  getmodule_doc("pyfolio", file1)
+file1= r"D:/_devs/Python01/aapackage/printdoc.txt"
+getmodule_doc("numpy", file1)
 
 
 
